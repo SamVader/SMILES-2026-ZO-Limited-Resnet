@@ -60,17 +60,14 @@ class ZeroOrderOptimizer:
     """
 
     _CURRICULUM = [
-        (0.0,  0.60, ["fc.weight", "fc.bias"], 1.0),
-        (0.60, 1.01, ["fc.weight", "fc.bias",
-                      "layer4.1.conv2.weight",
-                      "layer4.1.bn2.weight", "layer4.1.bn2.bias"], 0.1),
+        (0.0,  1.01, ["layer4.1.bn2.weight", "layer4.1.bn2.bias"], 1.0),
     ]
 
     def __init__(
         self,
         model: nn.Module,
-        lr: float = 5e-3,
-        eps: float = 5e-3,
+        lr: float = 2e-3,
+        eps: float = 3e-3,
         perturbation_mode: str = "gaussian",
         n_steps: int = 256,
         beta1: float = 0.9,

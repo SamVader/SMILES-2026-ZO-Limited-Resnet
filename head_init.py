@@ -9,6 +9,16 @@ alternatives (e.g. Xavier, orthogonal, small-scale random, learned bias init).
 
 import torch
 import torch.nn as nn
+import torchvision.models as models
+import torchvision.datasets as datasets
+import torchvision.transforms as T
+from torch.utils.data import DataLoader
+
+
+_CIFAR100_MEAN = (0.5071, 0.4867, 0.4408)
+_CIFAR100_STD  = (0.2675, 0.2565, 0.2761)
+_DATA_DIR = "./data"
+_RIDGE_LAMBDA = 1e-2
 
 
 def init_last_layer(layer: nn.Linear) -> None:
@@ -32,6 +42,54 @@ def init_last_layer(layer: nn.Linear) -> None:
     # -------------------------------------------------------------------------
     # STUDENT: Replace or extend the initialization below.
     # -------------------------------------------------------------------------
-    nn.init.xavier_uniform_(layer.weight)
-    nn.init.zeros_(layer.bias)
+    _ridge_init(layer)
     # -------------------------------------------------------------------------
+
+
+def _ridge_init(layer: nn.Linear) -> None:
+    device = torch.device(
+        "mps" if torch.backends.mps.is_available()
+        else "cuda" if torch.cuda.is_available()
+        else "cpu"
+    )
+
+    backbone = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+    backbone.fc = nn.Identity()
+    backbone.eval().to(device)
+
+    transform = T.Compose([
+        T.Resize(224),
+        T.ToTensor(),
+        T.Normalize(mean=_CIFAR100_MEAN, std=_CIFAR100_STD),
+    ])
+
+    dataset = datasets.CIFAR100(
+        root=_DATA_DIR, train=True, download=True, transform=transform
+    )
+    loader = DataLoader(dataset, batch_size=256, shuffle=False, num_workers=0)
+
+    features, labels = [], []
+    with torch.no_grad():
+        for imgs, lbls in loader:
+            features.append(backbone(imgs.to(device)).cpu())
+            labels.append(lbls)
+
+    X = torch.cat(features, dim=0).float()
+    y = torch.cat(labels,   dim=0).long()
+
+    N, D = X.shape
+    C = 100
+
+    Y = torch.zeros(N, C)
+    Y.scatter_(1, y.unsqueeze(1), 1.0)
+
+    A = X.T @ X + _RIDGE_LAMBDA * N * torch.eye(D)
+    B = X.T @ Y
+    W = torch.linalg.solve(A, B)
+
+    residuals = Y - X @ W
+    bias = residuals.mean(dim=0)
+
+    with torch.no_grad():
+        layer.weight.copy_(W.T)
+        layer.bias.copy_(bias)
