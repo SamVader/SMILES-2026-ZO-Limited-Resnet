@@ -1,0 +1,12 @@
+{
+  "val_accuracy_top1_imagenet_head": 0.0037,
+  "val_accuracy_top1_init_head": 0.6157,
+  "val_accuracy_top1_finetuned": 0.6164,
+  "n_batches": 256,
+  "batch_size": 32,
+  "layers_tuned": [
+    "layer4.1.bn2.weight",
+    "layer4.1.bn2.bias"
+  ],
+  "total_samples": 10000
+}
